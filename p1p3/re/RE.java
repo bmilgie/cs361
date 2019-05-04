@@ -3,7 +3,9 @@ package re;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+import fa.State;
 import fa.nfa.NFA;
+import fa.nfa.NFAState;
 
 public class RE implements REInterface {
 	String regEx = "";
@@ -19,15 +21,35 @@ public class RE implements REInterface {
 	}
 
 	private NFA regEx() {
-		NFA term = term();
-			
-		if(more() && peek() == '|'){
-			eat('|');
-			NFA regEx = regEx();
-			return consume(term, regEx); //choice
-		}else{
-			return term;
-		}
+	    NFA term = term() ;
+
+	    if (more() && peek() == '|') {
+	    	eat ('|') ;
+	    	NFA regex = regEx() ;
+	    	//now create a union of term and regex NFA
+	    	//1. create a new NFA
+	    	NFA union = new NFA();
+	    	//create a start state for it
+	    	String startName = "q" + stateCounter;
+	    	union.addStartState(startName);
+	    	
+	    	//add all states from other NFAS
+	    	for(State state: (term.getStates())) {
+	    		union.addState(state.getName());
+	    	}
+	    	
+	    	for(State state: regex.getStates()) {
+	    		union.addState(state.getName());
+	    	}
+	    	
+	    	//add the transitions between starName and starStates of other two NFAs
+	    	union.addTransition(startName, 'e', term.getStartState().getName());
+	    	union.addTransition(startName, 'e', regex.getStartState().getName());
+	    	
+	    	return union;
+	    	} else {
+		    	return term;
+	    	}
 	}
 
 	
@@ -44,15 +66,23 @@ public class RE implements REInterface {
 			}
 		}
 		
-		return null;
+		return factor;
 	}
 	
-	private NFA concat(NFA reg, NFA reg2) {
+	private NFA concat(NFA reg1, NFA reg2) {
 		String s2 = reg2.getStartState().getName();
-		//Set<State> regFinal = reg.getFinalStates();
+		Set<State> reg1Finals = reg1.getFinalStates();
+		reg1.addNFAStates(reg2.getStates());
 		
+		for(State state: reg1Finals) {
+			NFAState tmp = (NFAState)state;
+			tmp.setNonFinal();
+			reg1.addTransition(tmp.getName(), 'e', s2);
+		}
 		
-		return null;
+		reg1.addAbc(reg2.getABC());
+		
+		return reg1;
 	}
 
 	private NFA factor() {
@@ -66,8 +96,38 @@ public class RE implements REInterface {
 	}
 
 	private NFA star(NFA root) {
-//star rule
-		return null;
+
+		NFA retNFA = new NFA();
+		
+		//Make new start state
+		String start = "q" + stateCounter;
+		stateCounter++;
+		retNFA.addStartState(start);
+		
+		//Make new final state
+		String finState = "q" + stateCounter;
+		stateCounter++;
+		retNFA.addFinalState(finState);
+		
+		//Add all current states to new NFA
+		for(State state: root.getStates()) {
+			retNFA.addState(state.getName());
+		}
+		
+		//
+		for(State state: root.getFinalStates()) {
+			NFAState tmp = (NFAState)state;
+			tmp.setFinal();
+			retNFA.addTransition(tmp.getName(), 'e', finState);
+			retNFA.addTransition(tmp.getName(), 'e', root.getStartState().getName());
+		}
+		
+		retNFA.addTransition(start, 'e', root.getStartState().getName());
+		retNFA.addTransition(start, 'e', finState);
+		retNFA.addAbc(root.getABC());
+		
+		
+		return retNFA;
 	}
 
 	private NFA root() {
@@ -84,16 +144,16 @@ public class RE implements REInterface {
 
 	private NFA symbol(char cookie) {
 		NFA nfa = new NFA();
-		String s = "" + stateCounter++;
+		String s = "q" + stateCounter++;
 		nfa.addStartState(s);
-		String f = "" + stateCounter++;
+		String f = "q" + stateCounter++;
 		nfa.addFinalState(f);
 		
 		nfa.addTransition(s, cookie, f);
 		
 		Set<Character> alphabet = new LinkedHashSet<Character>();
 		alphabet.add(cookie);
-		//nfa.addAbc(alphabet);
+		nfa.addAbc(alphabet);
 		return nfa;
 		
 	}
@@ -120,10 +180,5 @@ public class RE implements REInterface {
 		return regEx.length() > 0;
 	}
 	
-	private NFA consume(NFA reg, NFA reg2) { 
-
-
-		return null;
-	}
 
 }
