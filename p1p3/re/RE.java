@@ -52,13 +52,8 @@ public class RE implements REInterface {
 			union.addStartState(startName);
 
 			//add all states from other NFAS
-			for(State state: (term.getStates())) {
-				union.addState(state.getName());
-			}
-
-			for(State state: regex.getStates()) {
-				union.addState(state.getName());
-			}
+			union.addNFAStates(term.getStates());
+			union.addNFAStates(regex.getStates());
 
 			//add the transitions between startName and startStates of other two NFAs
 			union.addTransition(startName, 'e', term.getStartState().getName());
@@ -67,40 +62,6 @@ public class RE implements REInterface {
 			//add the alphabets of the other two NFAs to new NFA
 			union.addAbc(term.getABC());
 			union.addAbc(regex.getABC());
-
-			//Add all transitions present in 'term' NFA
-			for(char c: term.getABC()) {
-				for(State state: term.getStates())
-					for(State s2: ((NFAState) state).toStates(c)) {
-						union.addTransition(state.getName(), c, s2.getName());
-					}
-			}
-
-			//Add all transitions present in 'regex' NFA
-			for(char c: regex.getABC()) {
-				for(State state: regex.getStates())
-					for(State s2: ((NFAState) state).toStates(c)) {
-						union.addTransition(state.getName(), c, s2.getName());
-					}
-			}
-
-			//Make sure all final states from 'term' NFA are also final states in new NFA
-			for(State state: term.getFinalStates()) {
-				for(State s2: union.getStates()) {
-					if(s2.getName().equals(state.getName())) {
-						((NFAState) s2).setFinal();
-					}
-				}
-			}
-
-			//Make sure all final states from 'regex' NFA are also final states in new NFA
-			for(State state: regex.getFinalStates()) {
-				for(State s2: union.getStates()) {
-					if(s2.getName().equals(state.getName())) {
-						((NFAState) s2).setFinal();
-					}
-				}
-			}
 
 			return union;
 
@@ -140,17 +101,21 @@ public class RE implements REInterface {
 	 * @return NFA that has been concatenated
 	 */
 	private NFA concat(NFA reg1, NFA reg2) {
+		//Get final states and name of start state in second NFA
 		String reg2Start = reg2.getStartState().getName();
 		Set<State> reg1Finals = reg1.getFinalStates();
 
-		
+		//Add all states from second NFA to first NFA
 		reg1.addNFAStates(reg2.getStates());
 		
+		//Make sure first NFA's final states are not final
+		//But add their transitions to begining of second NFA
 		for(State state: reg1Finals) {
 			((NFAState)state).setNonFinal();
 			reg1.addTransition(state.getName(), 'e', reg2Start);
 		}
 		
+		//Make sure both alphabets are included
 		reg1.addAbc(reg2.getABC());
 		
 		return reg1;
@@ -163,6 +128,7 @@ public class RE implements REInterface {
 	private NFA factor() {
 		NFA root = root();
 		
+		//If star op is needed, descend into recursion
 		while(more() && peek() == '*'){
 			eat('*');
 			root = star(root);
@@ -189,27 +155,31 @@ public class RE implements REInterface {
 		stateCounter++;
 		retNFA.addFinalState(finState);
 		
+		//Add all states from root to new NFA
 		retNFA.addNFAStates(root.getStates());
 		
+		//Add empty transitions because star allows for 0 occurrences of term/NFA
 		retNFA.addTransition(start, 'e', finState);
 		retNFA.addTransition(finState, 'e', root.getStartState().getName());
-
 		
+		//Tie new start to root NFA
 		retNFA.addTransition(start, 'e', root.getStartState().getName());
+		
+		//Make sure old alphabet is included
 		retNFA.addAbc(root.getABC());
 		
+		//Add empty transitions from old final states to new final state
 		for(State state: root.getFinalStates()) {
 			retNFA.addTransition(state.getName(), 'e', finState);
 			
+			//Make sure new final is the only final state in new NFA
 			for(State s2: retNFA.getFinalStates()){
 				if(s2.getName().equals(state.getName())) {
 					((NFAState)s2).setNonFinal();
 				}
 			}
-
 		}
 
-    	
     	return retNFA;
 	}
 
@@ -218,6 +188,7 @@ public class RE implements REInterface {
 	 * @return an NFA built from the next symbol or within the parenthesis
 	 */
 	private NFA root() {
+		//Check if next symbol requires changing precedent using '()'
 		switch (peek()){
 		case '(':
 			eat('(');
@@ -231,11 +202,13 @@ public class RE implements REInterface {
 
 	/**
 	 * Builds an NFA from the given character
-	 * @param c
+	 * @param c Character to define transition on
 	 * @return NFA from given character
 	 */
 	private NFA symbol(char c) {
 		NFA nfa = new NFA();
+		
+		//Make a new simple NFA with 2 states and a transition on char c
 		String s = "q" + stateCounter++;
 		nfa.addStartState(s);
 		String f = "q" + stateCounter++;
@@ -252,15 +225,15 @@ public class RE implements REInterface {
 
 	/**
 	 * Peeks at the first index of the regex 
-	 * @return
+	 * @return The next unprocessed character in the regex
 	 */
 	private char peek(){
 		return regEx.charAt(0);
 	}
 	
 	/**
-	 * processes the character and removes from the regex
-	 * @param c
+	 * Processes the character and removes from the regex
+	 * @param c Character to process
 	 */
 	private void eat(char c){
 		if(peek() == c){
@@ -271,7 +244,7 @@ public class RE implements REInterface {
 	}
 	
 	/**
-	 * moves the processed character, removing the character from the regex
+	 * Moves the processed character, removing the character from the regex and returning it
 	 * @return the character that was processed
 	 */
 	private char next(){
@@ -281,7 +254,7 @@ public class RE implements REInterface {
 	}
 	
 	/**
-	 * evaluates if there are more characters to assess in the regex
+	 * Evaluates if there are more characters to assess in the regex
 	 * @return boolean
 	 */
 	private boolean more(){
